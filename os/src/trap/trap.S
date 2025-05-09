@@ -36,7 +36,9 @@ __alltraps:
     # set input argument of trap_handler(cx: &mut TrapContext)
     mv a0, sp
     call trap_handler
-
+    # fallthrough!
+    # __restore is automatically executed after
+    # trap_handler returns
 __restore:
     # now sp->kernel stack(after allocated), sscratch->user stack
     # restore sstatus/sepc

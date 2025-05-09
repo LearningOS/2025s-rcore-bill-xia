@@ -11,6 +11,7 @@
 
 mod context;
 mod switch;
+mod stat;
 #[allow(clippy::module_inception)]
 mod task;
 
@@ -22,6 +23,8 @@ use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
+
+pub use stat::TaskStatistics;
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -54,6 +57,7 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            task_stat: TaskStatistics::zero_init(),
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -135,6 +139,18 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    fn current_count_syscall(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_stat.count(syscall_id);
+    }
+
+    fn current_get_syscall_count(&self, syscall_id: usize) -> usize {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_stat.get_count(syscall_id)
+    }
 }
 
 /// Run the first task in task list.
@@ -168,4 +184,14 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+/// Count syscall for current task.
+pub fn count_syscall(syscall_id: usize) {
+    TASK_MANAGER.current_count_syscall(syscall_id);
+}
+
+/// Count syscall for current task.
+pub fn get_syscall_count(syscall_id: usize) -> usize {
+    TASK_MANAGER.current_get_syscall_count(syscall_id)
 }

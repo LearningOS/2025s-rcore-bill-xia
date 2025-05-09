@@ -1,13 +1,17 @@
 //! Process management syscalls
+
+use core::mem::size_of;
+
 use alloc::sync::Arc;
 
 use crate::{
     loader::get_app_data_by_name,
-    mm::{translated_refmut, translated_str},
+    mm::{translated_refmut, translated_str,translated_byte_buffer},
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
-        suspend_current_and_run_next,
+        suspend_current_and_run_next
     },
+    timer::{get_time_us,MICRO_PER_SEC},
 };
 
 #[repr(C)]
@@ -106,11 +110,24 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+    trace!("kernel: sys_get_time");
+    let us = get_time_us();
+    let ts = TimeVal {
+        sec: us / MICRO_PER_SEC,
+        usec: us % MICRO_PER_SEC
+    };
+    let buffers = translated_byte_buffer(current_user_token(), _ts as *const u8, size_of::<TimeVal>());
+    let bytes_written = 0;
+    for buffer in buffers {
+        let ts_buffer = unsafe {
+            core::slice::from_raw_parts(
+                (&ts as *const TimeVal as usize + bytes_written) as *const u8,
+                buffer.len()
+            )
+        };
+        buffer.copy_from_slice(ts_buffer);
+    }
+    0
 }
 
 /// YOUR JOB: Implement mmap.

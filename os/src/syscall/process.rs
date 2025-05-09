@@ -3,7 +3,7 @@ use crate::mm::translated_byte_buffer;
 use core::mem::size_of;
 use crate::timer::{get_time_us,MICRO_PER_SEC};
 // use crate::mm::translated_byte_buffer;
-use crate::task::{change_program_brk, current_user_token, exit_current_and_run_next, suspend_current_and_run_next};
+use crate::task::{change_program_brk, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,get_syscall_count};
 // use std::slice::from_raw_parts_mut;
 
 #[repr(C)]
@@ -51,11 +51,15 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     0
 }
 
-/// TODO: Finish sys_trace to pass testcases
-/// HINT: You might reimplement it with virtual memory management.
-pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
+// TODO: implement the syscall
+pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
     trace!("kernel: sys_trace");
-    -1
+    match trace_request {
+        0 => (unsafe {*(id as *const u8)}) as isize,
+        1 => { unsafe {*(id as *mut u8) = data as u8}; 0 },
+        2 => get_syscall_count(id) as isize,
+        _ => panic!("Unsupported trace {}", trace_request)
+    }
 }
 
 // YOUR JOB: Implement mmap.

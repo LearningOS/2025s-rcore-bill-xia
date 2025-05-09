@@ -5,6 +5,7 @@ use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
 use crate::trap::{trap_handler, TrapContext};
+use super::TaskStatistics;
 
 /// The task control block (TCB) of a task.
 pub struct TaskControlBlock {
@@ -19,6 +20,9 @@ pub struct TaskControlBlock {
 
     /// The phys page number of trap context
     pub trap_cx_ppn: PhysPageNum,
+
+    /// The task statistics
+    pub task_stat: TaskStatistics,
 
     /// The size(top addr) of program which is loaded from elf file
     pub base_size: usize,
@@ -59,6 +63,7 @@ impl TaskControlBlock {
             task_status,
             task_cx: TaskContext::goto_trap_return(kernel_stack_top),
             memory_set,
+            task_stat: TaskStatistics::zero_init(),
             trap_cx_ppn,
             base_size: user_sp,
             heap_bottom: user_sp,

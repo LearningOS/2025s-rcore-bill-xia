@@ -1,5 +1,5 @@
 //! Process management syscalls
-use crate::mm::translated_byte_buffer;
+use crate::mm::{translated_byte_buffer, translate_pointer};
 use core::mem::size_of;
 use crate::timer::{get_time_us,MICRO_PER_SEC};
 // use crate::mm::translated_byte_buffer;
@@ -55,8 +55,19 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
     trace!("kernel: sys_trace");
     match trace_request {
-        0 => (unsafe {*(id as *const u8)}) as isize,
-        1 => { unsafe {*(id as *mut u8) = data as u8}; 0 },
+        0 => if let Some(ptr) = translate_pointer(
+            current_user_token(), (id) as *const u8) {
+                unsafe { *ptr as isize }
+            } else {
+                -1
+            },
+        1 => if let Some(ptr) = translate_pointer(
+            current_user_token(), (id) as *const u8) {
+                unsafe {*ptr = data as u8};
+                0
+            } else {
+                -1
+            }
         2 => get_syscall_count(id) as isize,
         _ => panic!("Unsupported trace {}", trace_request)
     }

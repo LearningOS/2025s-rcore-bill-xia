@@ -181,6 +181,11 @@ impl PhysPageNum {
         let pa: PhysAddr = (*self).into();
         unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
     }
+    /// Get a pointer to physical address with given ppn and offset
+    pub fn get_phys_ptr(&self, offset: usize) -> *const u8 {
+        let pa: PhysAddr = (*self).into();
+        (pa.0 + offset) as *const u8
+    }
     /// Get the reference of page(array of bytes)
     pub fn get_bytes_array(&self) -> &'static mut [u8] {
         let pa: PhysAddr = (*self).into();

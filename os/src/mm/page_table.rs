@@ -179,3 +179,17 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     }
     v
 }
+
+/// Translate a pointer into physical space
+pub fn translate_pointer(token : usize, ptr: *const u8) -> Option<*mut u8> {
+    let start_va = VirtAddr::from(ptr as usize);
+    let vpn = start_va.floor();
+    let page_table = PageTable::from_token(token);
+    let pte_r: Option<PageTableEntry> = page_table.translate(vpn);
+    if let Some(pte) = pte_r {
+        let offset = start_va.page_offset();
+        Some(pte.ppn().get_phys_ptr(offset) as *mut u8)
+    } else {
+        None
+    }
+}

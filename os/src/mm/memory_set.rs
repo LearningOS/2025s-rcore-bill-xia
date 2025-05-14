@@ -271,6 +271,99 @@ impl MemorySet {
         self.areas.clear();
     }
 
+    /// Alloc a MapArea, check conflicts.
+    pub fn mmap(&mut self, start: usize, len: usize, prot: usize) -> isize {
+        if start % PAGE_SIZE != 0 {
+            return -1;
+        }
+        if prot & (!0x7usize) != 0 {
+            return -1;
+        }
+        if prot & (0x7usize) == 0 {
+            return -1;
+        }
+        let start_vpn: VirtPageNum = VirtAddr::from(start).floor();
+        let end_vpn: VirtPageNum = VirtAddr::from(start + len).ceil();
+        if start_vpn >= end_vpn {
+            return -1;
+        }
+        for area in &self.areas {
+            if area.vpn_range.get_start() >= end_vpn || area.vpn_range.get_end() <= start_vpn {
+                continue;
+            } else {
+                return -1;
+            }
+        }
+        self.push(
+            MapArea::new(
+                start_vpn.into(),
+                end_vpn.into(),
+                MapType::Framed,
+                MapPermission::U | (
+                    if prot & 0x1 != 0 {MapPermission::R} else {MapPermission::EMPTY}
+                ) | (
+                    if prot & 0x2 != 0 {MapPermission::W} else {MapPermission::EMPTY}
+                ) | (
+                    if prot & 0x4 != 0 {MapPermission::X} else {MapPermission::EMPTY}
+                ),
+            ),
+            None,
+        );
+        0
+    }
+    /// DeAlloc a chunk
+    pub fn munmap(&mut self, start: usize, len: usize) -> isize {
+        if start % PAGE_SIZE != 0 {
+            return -1;
+        }
+        let start_vpn: VirtPageNum = VirtAddr::from(start).floor();
+        let end_vpn: VirtPageNum = VirtAddr::from(start + len).ceil();
+        if start_vpn >= end_vpn {
+            return -1;
+        }
+        let mut curr_vpn = start_vpn;
+        while curr_vpn < end_vpn {
+            let mut mapped = false;
+            for area in &self.areas {
+                if area.vpn_range.get_start() <= curr_vpn && curr_vpn < area.vpn_range.get_end() {
+                    mapped = true;
+                    break;
+                }
+            }
+            if !mapped {
+                return -1;
+            }
+            curr_vpn.step();
+        }
+        let mut new_areas = Vec::new();
+        for mut area in self.areas.drain(..) {
+            if area.vpn_range.get_start() >= end_vpn || area.vpn_range.get_end() <= start_vpn {
+                new_areas.push(area);
+                continue;
+            }
+            if start_vpn <= area.vpn_range.get_start() && area.vpn_range.get_end() <= end_vpn {
+                // deleted
+                // doesn't implement Drop, manually unmap
+                area.unmap(&mut self.page_table);
+                continue;
+            }
+            if area.vpn_range.get_start() < start_vpn && end_vpn < area.vpn_range.get_end() {
+                let mut new_area = area.split(&mut self.page_table, start_vpn);
+                new_area.shrink_from(&mut self.page_table, end_vpn);
+                new_areas.push(area);
+                new_areas.push(new_area);
+                continue;
+            }
+            if area.vpn_range.get_end() <= end_vpn {
+                area.shrink_from(&mut self.page_table, start_vpn);
+            } else {
+                area.shrink_to(&mut self.page_table, end_vpn);
+            }
+            new_areas.push(area);
+        }
+        self.areas = new_areas;
+        0
+    }
     /// shrink the area to new_end
     #[allow(unused)]
     pub fn shrink_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
@@ -365,6 +458,30 @@ impl MapArea {
         }
     }
     #[allow(unused)]
+    /// split itself into two chunks, returning the newly split one
+    pub fn split(&mut self, page_table: &mut PageTable, cut: VirtPageNum) -> Self {
+        let mut new_area: Self = Self {
+            vpn_range: VPNRange::new(cut, self.vpn_range.get_end()),
+            data_frames: BTreeMap::new(),
+            map_type: self.map_type,
+            map_perm: self.map_perm
+        };
+        let mut curr_vpn = self.vpn_range.get_start();
+        while curr_vpn < cut {
+            new_area.data_frames.insert(curr_vpn, self.data_frames.remove(&curr_vpn).unwrap());
+            curr_vpn.step();
+        }
+        self.vpn_range = VPNRange::new(self.vpn_range.get_start(), cut);
+        new_area
+    }
+    #[allow(unused)]
+    pub fn shrink_from(&mut self, page_table: &mut PageTable, new_start: VirtPageNum) {
+        for vpn in VPNRange::new(self.vpn_range.get_start(), new_start) {
+            self.unmap_one(page_table, vpn)
+        }
+        self.vpn_range = VPNRange::new(new_start, self.vpn_range.get_end());
+    }
+    #[allow(unused)]
     pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
         for vpn in VPNRange::new(new_end, self.vpn_range.get_end()) {
             self.unmap_one(page_table, vpn)
@@ -412,6 +529,8 @@ pub enum MapType {
 bitflags! {
     /// map permission corresponding to that in pte: `R W X U`
     pub struct MapPermission: u8 {
+        ///Empty
+        const EMPTY = 0;
         ///Readable
         const R = 1 << 1;
         ///Writable

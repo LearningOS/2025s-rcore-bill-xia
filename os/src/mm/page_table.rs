@@ -1,5 +1,7 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
 
+use crate::mm::address::vaddr_is_canonical;
+
 use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -181,14 +183,21 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
 }
 
 /// Translate a pointer into physical space
-pub fn translate_pointer(token : usize, ptr: *const u8) -> Option<*mut u8> {
+pub fn translate_pointer(token : usize, ptr: *const u8, prot: PTEFlags) -> Option<*mut u8> {
+    if !vaddr_is_canonical(ptr as usize) {
+        return None;
+    }
     let start_va = VirtAddr::from(ptr as usize);
     let vpn = start_va.floor();
     let page_table = PageTable::from_token(token);
     let pte_r: Option<PageTableEntry> = page_table.translate(vpn);
     if let Some(pte) = pte_r {
         let offset = start_va.page_offset();
-        Some(pte.ppn().get_phys_ptr(offset) as *mut u8)
+        if pte.flags() & prot != prot {
+            None
+        } else {
+            Some(pte.ppn().get_phys_ptr(offset) as *mut u8)
+        }
     } else {
         None
     }

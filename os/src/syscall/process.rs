@@ -1,9 +1,9 @@
 //! Process management syscalls
-use crate::mm::{translated_byte_buffer, translate_pointer};
+use crate::mm::{translate_pointer, translated_byte_buffer, PTEFlags};
 use core::mem::size_of;
 use crate::timer::{get_time_us,MICRO_PER_SEC};
 // use crate::mm::translated_byte_buffer;
-use crate::task::{change_program_brk, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,get_syscall_count};
+use crate::task::{change_program_brk, current_user_token, exit_current_and_run_next, suspend_current_and_run_next, get_syscall_count, mmap, munmap};
 // use std::slice::from_raw_parts_mut;
 
 #[repr(C)]
@@ -56,14 +56,14 @@ pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
     trace!("kernel: sys_trace");
     match trace_request {
         0 => if let Some(ptr) = translate_pointer(
-            current_user_token(), (id) as *const u8) {
+            current_user_token(), (id) as *const u8, PTEFlags::R) {
                 unsafe { *ptr as isize }
             } else {
                 -1
             },
         1 => if let Some(ptr) = translate_pointer(
-            current_user_token(), (id) as *const u8) {
-                unsafe {*ptr = data as u8};
+            current_user_token(), (id) as *const u8, PTEFlags::W) {
+                unsafe { *ptr = data as u8 };
                 0
             } else {
                 -1
@@ -74,15 +74,15 @@ pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
 }
 
 // YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+pub fn sys_mmap(start: usize, len: usize, prot: usize) -> isize {
+    trace!("kernel: sys_mmap");
+    mmap(start, len, prot)
 }
 
 // YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    trace!("kernel: sys_munmap");
+    munmap(start, len)
 }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {

@@ -274,5 +274,10 @@ where
         }
     }
 }
+
+/// Check if the bit[63:39] equals to bit[38]
+pub fn vaddr_is_canonical(vaddr: usize) -> bool {
+    return (vaddr >> 38) == 0 || (vaddr >> 38) == (1 << 26) - 1;
+}
 /// a simple range structure for virtual page number
 pub type VPNRange = SimpleRange<VirtPageNum>;

@@ -2,7 +2,7 @@ use super::{
     block_cache_sync_all, get_block_cache, Bitmap, BlockDevice, DiskInode, DiskInodeType, Inode,
     SuperBlock,
 };
-use crate::BLOCK_SZ;
+use crate::{vfs::StatMode, BLOCK_SZ};
 use alloc::sync::Arc;
 use spin::Mutex;
 ///An easy file system on block
@@ -109,7 +109,7 @@ impl EasyFileSystem {
         // acquire efs lock temporarily
         let (block_id, block_offset) = efs.lock().get_disk_inode_pos(0);
         // release efs lock
-        Inode::new(block_id, block_offset, Arc::clone(efs), block_device)
+        Inode::new(block_id, block_offset, 0, StatMode::DIR, Arc::clone(efs), block_device)
     }
     /// Get inode by id
     pub fn get_disk_inode_pos(&self, inode_id: u32) -> (u32, usize) {

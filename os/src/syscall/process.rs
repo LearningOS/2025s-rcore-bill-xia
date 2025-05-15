@@ -116,7 +116,7 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
         usec: us % MICRO_PER_SEC
     };
     let buffers = translated_byte_buffer(current_user_token(), _ts as *const u8, size_of::<TimeVal>());
-    let bytes_written = 0;
+    let mut bytes_written = 0;
     for buffer in buffers {
         let ts_buffer = unsafe {
             core::slice::from_raw_parts(
@@ -125,6 +125,7 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
             )
         };
         buffer.copy_from_slice(ts_buffer);
+        bytes_written += ts_buffer.len();
     }
     0
 }

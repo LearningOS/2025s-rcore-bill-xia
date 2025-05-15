@@ -15,6 +15,10 @@ pub trait File: Send + Sync {
     fn read(&self, buf: UserBuffer) -> usize;
     /// write to the file from buf, return the number of bytes written
     fn write(&self, buf: UserBuffer) -> usize;
+    /// statistic
+    fn fstat(&self) -> Option<Stat> {
+        None
+    }
 }
 
 /// The stat of a inode
@@ -46,5 +50,13 @@ bitflags! {
     }
 }
 
-pub use inode::{list_apps, open_file, OSInode, OpenFlags};
+impl Into<StatMode> for u32 {
+    fn into(self) -> StatMode {
+        StatMode {
+            bits: self
+        }
+    }
+}
+
+pub use inode::{list_apps, open_file, linkat, unlinkat, OSInode, OpenFlags};
 pub use stdio::{Stdin, Stdout};

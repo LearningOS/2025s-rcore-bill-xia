@@ -8,7 +8,7 @@ const EFS_MAGIC: u32 = 0x3b800001;
 /// The max number of direct inodes
 const INODE_DIRECT_COUNT: usize = 28;
 /// The max length of inode name
-const NAME_LENGTH_LIMIT: usize = 27;
+const NAME_LENGTH_LIMIT: usize = 26;
 /// The max number of indirect1 inodes
 const INODE_INDIRECT1_COUNT: usize = BLOCK_SZ / 4;
 /// The max number of indirect2 inodes
@@ -85,7 +85,8 @@ pub struct DiskInode {
     pub direct: [u32; INODE_DIRECT_COUNT],
     pub indirect1: u32,
     pub indirect2: u32,
-    type_: DiskInodeType,
+    pub refcnt: u32,
+    pub type_: DiskInodeType,
 }
 
 impl DiskInode {
@@ -97,6 +98,7 @@ impl DiskInode {
         self.indirect1 = 0;
         self.indirect2 = 0;
         self.type_ = type_;
+        self.refcnt = 1;
     }
     /// Whether this inode is a directory
     pub fn is_dir(&self) -> bool {
@@ -387,11 +389,26 @@ impl DiskInode {
         }
         write_size
     }
+
+    pub fn increase_refcnt(&mut self) -> u32 {
+        self.refcnt += 1;
+        self.refcnt
+    }
+
+    pub fn decrease_refcnt(&mut self) -> u32 {
+        if self.refcnt == 0 {
+            panic!("decrease_refcnt on file with refcnt 0");
+        }
+        self.refcnt -= 1;
+        self.refcnt
+    }
 }
+
 /// A directory entry
 #[repr(C)]
 pub struct DirEntry {
     name: [u8; NAME_LENGTH_LIMIT + 1],
+    valid: u8,
     inode_id: u32,
 }
 /// Size of a directory entry
@@ -402,8 +419,13 @@ impl DirEntry {
     pub fn empty() -> Self {
         Self {
             name: [0u8; NAME_LENGTH_LIMIT + 1],
+            valid: 0,
             inode_id: 0,
         }
+    }
+    /// is_valid
+    pub fn is_valid(&self) -> bool {
+        self.valid != 0
     }
     /// Crate a directory entry from name and inode number
     pub fn new(name: &str, inode_id: u32) -> Self {
@@ -411,6 +433,7 @@ impl DirEntry {
         bytes[..name.len()].copy_from_slice(name.as_bytes());
         Self {
             name: bytes,
+            valid: 1,
             inode_id,
         }
     }

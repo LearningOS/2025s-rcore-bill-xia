@@ -342,9 +342,11 @@ impl MemorySet {
                 continue;
             }
             if start_vpn <= area.vpn_range.get_start() && area.vpn_range.get_end() <= end_vpn {
-                // deleted
-                // doesn't implement Drop, manually unmap
+                // area will be deleted after continue
+                // frames will be dropped, but still mapped in page_table
+                // manually unmap them.
                 area.unmap(&mut self.page_table);
+                // ----- drop(area)
                 continue;
             }
             if area.vpn_range.get_start() < start_vpn && end_vpn < area.vpn_range.get_end() {

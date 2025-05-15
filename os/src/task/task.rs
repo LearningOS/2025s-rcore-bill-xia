@@ -68,6 +68,12 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Priority, effects step size
+    pub prio: isize,
+
+    /// Stride, represents time already taken
+    pub stride: isize,
 }
 
 impl TaskControlBlockInner {
@@ -90,7 +96,7 @@ impl TaskControlBlockInner {
 impl TaskControlBlock {
     /// Create a new process
     ///
-    /// At present, it is only used for the creation of initproc
+    /// It is used for the creation of initproc and spawn
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
@@ -118,6 +124,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    prio: 16,
+                    stride: 0
                 })
             },
         };
@@ -191,6 +199,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    prio: 16,
+                    stride: 0
                 })
             },
         });
@@ -202,6 +212,30 @@ impl TaskControlBlock {
         trap_cx.kernel_sp = kernel_stack_top;
         // return
         task_control_block
+        // **** release child PCB
+        // ---- release parent PCB
+    }
+
+    /// parent process spawn the child process
+    pub fn spawn(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        let new_task_cb = Arc::new(Self::new(elf_data));
+        // add child, access parent PCB exclusively
+        let mut parent_inner = self.inner_exclusive_access();
+        parent_inner.children.push(new_task_cb.clone());
+        new_task_cb
+        // **** release child PCB
+        // ---- release parent PCB
+    }
+
+
+    /// parent process spawn the child process
+    pub fn set_priority(self: &Arc<Self>, prio: isize) -> isize {
+        if prio < 2 {
+            -1
+        } else {
+            self.inner_exclusive_access().prio = prio;
+            prio
+        }
         // **** release child PCB
         // ---- release parent PCB
     }
